@@ -58,7 +58,7 @@
       border-radius: var(--radius);
       padding: 14px 16px;
       display: grid;
-      grid-template-columns: 1fr 2fr auto;
+      grid-template-columns: 1fr auto;
       gap: 12px;
       align-items: end;
     }
@@ -243,17 +243,8 @@
   <!-- ── Settings ───────────────────────────────────── -->
   <div class="settings-panel" id="settingsPanel">
     <div class="form-group">
-      <label>Provedor de IA</label>
-      <select id="provider">
-        <option value="vision">Cloud Vision API (Google) ⭐</option>
-        <option value="gemini">Gemini Flash (Google)</option>
-        <option value="claude">Claude Sonnet (Anthropic)</option>
-        <option value="openai">GPT-4o (OpenAI)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>API Key</label>
-      <input type="password" id="apiKey" placeholder="Cole sua chave aqui…" autocomplete="off" />
+      <label>Google Gemini API Key</label>
+      <input type="password" id="apiKey" placeholder="Cole sua chave do Google AI Studio aqui…" autocomplete="off" />
     </div>
     <button class="btn btn-ghost" id="saveBtn" style="height:38px">💾 Salvar</button>
   </div>
@@ -349,12 +340,10 @@
   const settingsPanel = $('settingsPanel');
   const saveBtn       = $('saveBtn');
   const apiKeyInput   = $('apiKey');
-  const providerSel   = $('provider');
 
   // ── Configurações ────────────────────────────────────
   const saved = JSON.parse(localStorage.getItem('geofinder_cfg') || '{}');
-  if (saved.apiKey)   apiKeyInput.value  = saved.apiKey;
-  if (saved.provider) providerSel.value  = saved.provider;
+  if (saved.apiKey) apiKeyInput.value = saved.apiKey;
 
   settingsToggle.addEventListener('click', () =>
     settingsPanel.style.display = settingsPanel.style.display === 'none' ? '' : 'none'
@@ -363,7 +352,7 @@
   saveBtn.addEventListener('click', () => {
     const key = apiKeyInput.value.trim();
     if (!key) { showStatus('Digite uma API Key válida.', 'error'); return; }
-    localStorage.setItem('geofinder_cfg', JSON.stringify({ apiKey: key, provider: providerSel.value }));
+    localStorage.setItem('geofinder_cfg', JSON.stringify({ apiKey: key }));
     showStatus('Configurações salvas!', 'success');
   });
 
@@ -432,8 +421,7 @@
 
   // ── Analisar ─────────────────────────────────────────
   analyzeBtn.addEventListener('click', async () => {
-    const apiKey   = apiKeyInput.value.trim();
-    const provider = providerSel.value;
+    const apiKey = apiKeyInput.value.trim();
 
     if (!apiKey) {
       showStatus('Configure a API Key antes de analisar.', 'error');
@@ -446,7 +434,7 @@
 
     try {
       const base64 = imageDataUrl.split(',')[1];
-      const result = await callAI(base64, apiKey, provider);
+      const result = await callAI(base64, apiKey);
       renderResult(result);
     } catch (err) {
       showStatus('Erro na análise: ' + err.message, 'error');
@@ -480,11 +468,16 @@ Regras:
 - Considere: vegetação, topografia, arquitetura, idioma em placas, clima, padrões urbanos, etc.`;
 
   // ── Chamadas de API ──────────────────────────────────
-  async function callAI(base64, apiKey, provider) {
-    if (provider === 'vision') return callVision(base64, apiKey);
-    if (provider === 'gemini') return callGemini(base64, apiKey);
-    if (provider === 'claude') return callClaude(base64, apiKey);
-    return callOpenAI(base64, apiKey);
+  async function callAI(base64, apiKey) {
+    const models = await resolveGeminiModels(apiKey);
+    const t = await geminiGenerate(models, apiKey, {
+      contents: [{ parts: [
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+        { text: PROMPT }
+      ]}],
+      generationConfig: { maxOutputTokens: 600, temperature: 0.1 },
+    });
+    return parseJSON(t);
   }
 
   async function resolveGeminiModels(key) {
@@ -521,101 +514,6 @@ Regras:
       return t;
     }
     throw lastErr || new Error('Todos os modelos Gemini indisponíveis. Tente novamente em alguns minutos.');
-  }
-
-  async function callGemini(base64, apiKey) {
-    const models = await resolveGeminiModels(apiKey);
-    const t = await geminiGenerate(models, apiKey, {
-      contents: [{ parts: [
-        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-        { text: PROMPT }
-      ]}],
-      generationConfig: { maxOutputTokens: 600, temperature: 0.1 },
-    });
-    return parseJSON(t);
-  }
-
-  async function callVision(base64, apiKey) {
-    const res = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ image: { content: base64 },
-          features: [{ type: 'LANDMARK_DETECTION', maxResults: 5 },
-                     { type: 'LABEL_DETECTION', maxResults: 10 }] }] }) }
-    );
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    const data = await res.json();
-    const lms  = data.responses?.[0]?.landmarkAnnotations || [];
-    if (lms.length > 0) {
-      const top = lms[0];
-      const loc = top.locations?.[0]?.latLng;
-      if (!loc) throw new Error('Landmark sem coordenadas.');
-      const score  = top.score || 0;
-      const others = lms.slice(1).map(l => l.description).join(', ');
-      return {
-        found: true, latitude: loc.latitude, longitude: loc.longitude,
-        city: top.description, region: '', country: '',
-        description: others ? `${top.description}. Também: ${others}.` : top.description,
-        confidence: score > 0.7 ? 'alto' : score > 0.4 ? 'médio' : 'baixo',
-        radius_km:  score > 0.7 ? 2 : score > 0.4 ? 10 : 30,
-      };
-    }
-    const labels = (data.responses?.[0]?.labelAnnotations || []).map(l => l.description).join(', ');
-    return { found: false, description: labels
-      ? `Sem landmark reconhecido. Elementos: ${labels}. Tente Gemini ou Claude para cenas genéricas.`
-      : 'Nenhum landmark reconhecido. Use Gemini ou Claude para cenas sem pontos famosos.' };
-  }
-
-  async function callClaude(base64, apiKey) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 600,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-            { type: 'text', text: PROMPT },
-          ],
-        }],
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    return parseJSON(data.content[0].text);
-  }
-
-  async function callOpenAI(base64, apiKey) {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 600,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-            { type: 'text', text: PROMPT },
-          ],
-        }],
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    return parseJSON(data.choices[0].message.content);
   }
 
   function parseJSON(text) {

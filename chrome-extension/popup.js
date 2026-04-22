@@ -14,9 +14,8 @@
   });
 
   // ── Configurações (compartilhadas) ───────────────────
-  chrome.storage.local.get(['apiKey', 'provider'], data => {
-    if (data.apiKey)   $('apiKey').value   = data.apiKey;
-    if (data.provider) $('provider').value = data.provider;
+  chrome.storage.local.get(['apiKey'], data => {
+    if (data.apiKey) $('apiKey').value = data.apiKey;
   });
 
   $('settingsToggle').addEventListener('click', () =>
@@ -31,14 +30,14 @@
   $('saveSettings').addEventListener('click', () => {
     const key = $('apiKey').value.trim();
     if (!key) { showScreenStatus('Digite uma API Key.', 'error'); return; }
-    chrome.storage.local.set({ apiKey: key, provider: $('provider').value }, () => {
+    chrome.storage.local.set({ apiKey: key }, () => {
       showScreenStatus('Configurações salvas!', 'success');
       setTimeout(() => $('settingsPanel').classList.add('hidden'), 700);
     });
   });
 
   function getConfig() {
-    return { apiKey: $('apiKey').value.trim(), provider: $('provider').value };
+    return { apiKey: $('apiKey').value.trim() };
   }
 
   // ══════════════════════════════════════════════════════
@@ -81,7 +80,7 @@
   });
 
   analyzeBtn.addEventListener('click', async () => {
-    const { apiKey, provider } = getConfig();
+    const { apiKey } = getConfig();
     if (!apiKey) {
       showScreenStatus('Configure a API Key (⚙).', 'error');
       $('settingsPanel').classList.remove('hidden');
@@ -93,7 +92,7 @@
     setScreenUI('analyzing');
     $('resultSection').classList.add('hidden');
     try {
-      const result = await analyzeImage(imageDataUrl, query, apiKey, provider);
+      const result = await analyzeImage(imageDataUrl, query, apiKey);
       showScreenResult(result, imageDataUrl);
       setScreenUI('done');
     } catch (err) {
@@ -347,7 +346,7 @@
   });
 
   $('geoAnalyzeBtn').addEventListener('click', async () => {
-    const { apiKey, provider } = getConfig();
+    const { apiKey } = getConfig();
     if (!apiKey) {
       showGeoStatus('Configure a API Key (⚙).', 'error');
       $('settingsPanel').classList.remove('hidden');
@@ -357,7 +356,7 @@
     $('geoResult').classList.add('hidden');
     try {
       const b64 = geoImgDataUrl.split(',')[1];
-      const result = await geoCallAI(b64, apiKey, provider);
+      const result = await geoCallAI(b64, apiKey);
       geoRenderResult(result);
     } catch (err) {
       showGeoStatus('Erro: ' + err.message, 'error');
@@ -376,50 +375,7 @@ Responda SOMENTE com JSON válido, sem markdown:
 - radius_km: margem de erro em km
 - Se não identificável: {"found":false,"description":"motivo"}`;
 
-  async function geoCallAI(b64, key, provider) {
-    if (provider === 'vision') return geoCallVision(b64, key);
-    if (provider === 'gemini') return geoCallGemini(b64, key);
-    if (provider === 'claude') return geoCallClaude(b64, key);
-    return geoCallOpenAI(b64, key);
-  }
-
-  async function geoCallVision(b64, key) {
-    const res = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ image: { content: b64 },
-          features: [{ type:'LANDMARK_DETECTION', maxResults:5 },
-                     { type:'LABEL_DETECTION',    maxResults:10 }] }] }),
-      }
-    );
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    const data  = await res.json();
-    const resp  = data.responses?.[0];
-    const lms   = resp?.landmarkAnnotations || [];
-
-    if (lms.length > 0) {
-      const top   = lms[0];
-      const loc   = top.locations?.[0]?.latLng;
-      if (!loc) throw new Error('Landmark sem coordenadas.');
-      const score = top.score || 0;
-      const others = lms.slice(1).map(l => l.description).join(', ');
-      return {
-        found: true, latitude: loc.latitude, longitude: loc.longitude,
-        city: top.description, region: '', country: '',
-        description: others ? `${top.description}. Também: ${others}.` : top.description,
-        confidence: score > 0.7 ? 'alto' : score > 0.4 ? 'médio' : 'baixo',
-        radius_km:  score > 0.7 ? 2 : score > 0.4 ? 10 : 30,
-      };
-    }
-    const labels = (resp?.labelAnnotations || []).map(l => l.description).join(', ');
-    return { found: false, description: labels
-      ? `Sem landmark reconhecido. Elementos: ${labels}. Tente Gemini/Claude para cenas genéricas.`
-      : 'Nenhum landmark reconhecido. Use Gemini ou Claude para cenas sem pontos famosos.' };
-  }
-
-  async function geoCallGemini(b64, key) {
+  async function geoCallAI(b64, key) {
     const models = await resolveGeminiModels(key);
     const t = await geminiGenerateContent(models, key, {
       contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: GEO_PROMPT }] }],
@@ -461,32 +417,6 @@ Responda SOMENTE com JSON válido, sem markdown:
       return t;
     }
     throw lastErr || new Error('Todos os modelos Gemini indisponíveis. Tente novamente em alguns minutos.');
-  }
-
-  async function geoCallClaude(b64, key) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},
-      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:600,
-        messages:[{ role:'user', content:[
-          { type:'image', source:{ type:'base64', media_type:'image/jpeg', data:b64 } },
-          { type:'text', text:GEO_PROMPT }]}] })
-    });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    return parseJ((await res.json()).content[0].text);
-  }
-
-  async function geoCallOpenAI(b64, key) {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
-      body: JSON.stringify({ model:'gpt-4o', max_tokens:600,
-        messages:[{ role:'user', content:[
-          { type:'image_url', image_url:{ url:`data:image/jpeg;base64,${b64}` } },
-          { type:'text', text:GEO_PROMPT }]}] })
-    });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    return parseJ((await res.json()).choices[0].message.content);
   }
 
   function geoRenderResult(r) {
@@ -556,42 +486,15 @@ Responda SOMENTE com JSON válido, sem markdown:
     `Se a imagem mostrar um local real (mapa, satélite, street view, paisagem, cidade), adicione também: "latitude", "longitude", "city", "country".\n` +
     `Se não encontrar: {"found":false,"description":"motivo"}`;
 
-  async function analyzeImage(dataUrl, query, apiKey, provider) {
+  async function analyzeImage(dataUrl, query, apiKey) {
     const b64 = dataUrl.split(',')[1];
     const prompt = SCREEN_PROMPT(query);
-    // Cloud Vision não suporta localização de elementos em tela
-    if (provider === 'vision') throw new Error('Cloud Vision API não funciona no Screen Finder. Selecione Gemini, Claude ou GPT-4o nas configurações.');
-    if (provider === 'gemini') {
-      const models = await resolveGeminiModels(apiKey);
-      const t = await geminiGenerateContent(models, apiKey, {
-        contents: [{ parts: [{ inline_data: { mime_type: 'image/png', data: b64 } }, { text: prompt }] }],
-        generationConfig: { maxOutputTokens: 512, temperature: 0.2 }
-      });
-      return parseJ(t);
-    }
-    if (provider === 'claude') {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'},
-        body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:512,
-          messages:[{ role:'user', content:[
-            { type:'image', source:{ type:'base64', media_type:'image/png', data:b64 } },
-            { type:'text', text:prompt }]}] })
-      });
-      if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message||`HTTP ${res.status}`); }
-      return parseJ((await res.json()).content[0].text);
-    }
-    // OpenAI
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body: JSON.stringify({ model:'gpt-4o', max_tokens:512,
-        messages:[{ role:'user', content:[
-          { type:'image_url', image_url:{ url:`data:image/png;base64,${b64}` } },
-          { type:'text', text:prompt }]}] })
+    const models = await resolveGeminiModels(apiKey);
+    const t = await geminiGenerateContent(models, apiKey, {
+      contents: [{ parts: [{ inline_data: { mime_type: 'image/png', data: b64 } }, { text: prompt }] }],
+      generationConfig: { maxOutputTokens: 512, temperature: 0.2 }
     });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message||`HTTP ${res.status}`); }
-    return parseJ((await res.json()).choices[0].message.content);
+    return parseJ(t);
   }
 
   // ── Helpers ──────────────────────────────────────────
