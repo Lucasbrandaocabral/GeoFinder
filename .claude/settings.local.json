@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"d:/trabalho/GeoFinder\" init)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" add .gitignore index.html geo-finder/ chrome-extension/)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" status --short)",
+      "Bash(git -C d:/trabalho/GeoFinder commit -m ' *)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" branch -M main)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" remote add origin https://github.com/Lucasbrandaocabral/GeoFinder.git)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" remote -v)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" log --oneline)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" push -u origin main)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" commit --amend -m \"commit inicial do projeto\")",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" push --force origin main)",
+      "Bash(gh repo *)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" add README.md)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" commit -m \"add README\")",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" push)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" add chrome-extension/manifest.json)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" commit -m \"fix: add <all_urls> permission to allow captureVisibleTab from side panel\")",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" add geo-finder/index.html chrome-extension/popup.html chrome-extension/popup.js chrome-extension/manifest.json)",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" commit -m \"refactor: somente Gemini Flash como provedor de IA\")",
+      "Bash(git -C \"d:/trabalho/GeoFinder\" commit -m \"docs: atualiza README para somente Gemini Flash\")"
+    ]
+  }
+}

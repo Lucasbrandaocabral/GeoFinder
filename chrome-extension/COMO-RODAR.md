@@ -1,9 +1,9 @@
-# AI Screen Finder — Como instalar e usar
+# GeoFinder — Como instalar e usar a extensão
 
 ## 1. Ícones (opcional para testes)
 
 Os ícones são declarados no manifest mas **não bloqueiam o carregamento** durante desenvolvimento.
-Para gerar os ícones automaticamente:
+Para gerar automaticamente:
 
 ```bash
 cd icons
@@ -27,34 +27,48 @@ Ou copie qualquer PNG e renomeie para `icon16.png`, `icon48.png`, `icon128.png` 
 
 ## 3. Configurar a API Key
 
-1. Clique no ícone da extensão (🔍) na barra do Chrome
+1. Clique no ícone da extensão na barra do Chrome
 2. Clique no botão ⚙ (configurações)
-3. Escolha o provedor: **Claude (Anthropic)** ou **GPT-4o (OpenAI)**
-4. Cole sua API Key:
-   - **Claude**: obtenha em https://console.anthropic.com/
-   - **OpenAI**: obtenha em https://platform.openai.com/api-keys
-5. Clique em **Salvar configurações**
+3. Cole sua **Google Gemini API Key**
+   - Obtenha gratuitamente em: https://aistudio.google.com/
+4. Clique em **Salvar configurações**
 
 ---
 
-## 4. Usar a extensão
+## 4. Usar o Screen Finder
+
+Encontre qualquer elemento visual na tela atual por descrição.
 
 1. Acesse qualquer página no Chrome
-2. Abra o popup da extensão
-3. Digite o que deseja encontrar no campo de busca  
+2. Abra o painel da extensão
+3. Na aba **🔍 Screen Finder**, digite o que deseja encontrar  
    Ex: *"botão de fechar"*, *"minimap"*, *"ícone de notificação"*
 4. Clique em **📷 Capturar Tela**
-5. A tela atual aparecerá no popup — **arraste para selecionar** a região de interesse (opcional)
+5. A tela aparecerá no painel — **arraste para selecionar** a região de interesse (opcional)
 6. Clique em **🤖 Analisar com IA**
-7. Aguarde o resultado:
+7. Resultado:
    - Coordenadas X/Y do elemento (em % da imagem)
-   - Marcador visual (ponto vermelho + caixa delimitadora) na imagem
+   - Marcador visual na imagem (ponto vermelho + caixa delimitadora)
    - Descrição textual da localização
-   - Nível de confiança da análise
+   - Nível de confiança
 
 ---
 
-## 5. Estrutura dos arquivos
+## 5. Usar o GeoFinder
+
+Identifique a localização geográfica de qualquer imagem.
+
+1. Na aba **🌍 GeoFinder**, arraste uma imagem, clique para selecionar ou cole com `Ctrl+V`
+2. Clique em **🔍 Identificar Localização**
+3. Resultado:
+   - Cidade, região e país identificados
+   - Coordenadas geográficas
+   - Mapa interativo com o ponto estimado
+   - Link direto para o Google Maps
+
+---
+
+## 6. Estrutura dos arquivos
 
 ```
 chrome-extension/
@@ -63,7 +77,7 @@ chrome-extension/
 ├── popup.js            # Lógica: captura, seleção, chamada à IA, resultado
 ├── background.js       # Service Worker: captura a aba (captureVisibleTab)
 ├── content.js          # Content Script: expõe devicePixelRatio
-├── styles.css          # Estilo dark/moderno do popup
+├── styles.css          # Estilo dark do popup
 └── icons/
     ├── icon16.png      # (gerar com generate-icons.js)
     ├── icon48.png
@@ -73,47 +87,14 @@ chrome-extension/
 
 ---
 
-## 6. Exemplo de chamada à API (Claude)
-
-```js
-const response = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'Content-Type':      'application/json',
-    'x-api-key':         SUA_API_KEY,
-    'anthropic-version': '2023-06-01',
-  },
-  body: JSON.stringify({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 512,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: {
-            type:       'base64',
-            media_type: 'image/png',
-            data:        BASE64_DA_IMAGEM,
-          },
-        },
-        { type: 'text', text: 'Onde está o botão de fechar? Retorne JSON.' },
-      ],
-    }],
-  }),
-});
-const data = await response.json();
-console.log(data.content[0].text); // JSON com { found, x, y, width, height, description, confidence }
-```
-
----
-
 ## 7. Permissões usadas
 
-| Permissão     | Motivo                                      |
-|---------------|---------------------------------------------|
-| `activeTab`   | Capturar a aba ativa com captureVisibleTab  |
-| `tabs`        | Identificar a janela/aba correta            |
-| `storage`     | Salvar API Key e preferências localmente    |
+| Permissão | Motivo |
+|---|---|
+| `activeTab` | Capturar a aba ativa com captureVisibleTab |
+| `tabs` | Identificar a janela/aba correta |
+| `storage` | Salvar API Key localmente |
+| `sidePanel` | Abrir como painel lateral no Chrome |
+| `<all_urls>` | Permitir captureVisibleTab a partir do painel lateral |
 
-Nenhum dado é enviado a terceiros além da API configurada pelo usuário.
+Nenhum dado é enviado a terceiros além da API do Google Gemini configurada pelo usuário.
