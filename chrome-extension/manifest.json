@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "AI Screen Finder",
+  "version": "1.1.0",
+  "description": "Capture telas e localize geograficamente imagens com IA",
+
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "sidePanel"
+  ],
+
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://vision.googleapis.com/*",
+    "https://maps.googleapis.com/*"
+  ],
+
+  "action": {
+    "default_title": "AI Screen Finder"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["geo-finder.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

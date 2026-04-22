@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoFinder AI</title>
+
+  <style>
+    /* ── Reset & tokens ──────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d12;
+      --surface:  #15151f;
+      --surface2: #1c1c2a;
+      --border:   #2b2b3d;
+      --accent:   #4f8ef7;
+      --green:    #3ddc84;
+      --red:      #ff4d6d;
+      --warn:     #ffb347;
+      --text:     #e0e0f0;
+      --muted:    #6a6a8a;
+      --radius:   10px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+    }
+
+    .app { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* ── Header ──────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 26px; }
+    .logo h1 { font-size: 20px; font-weight: 700; color: #fff; }
+    .logo p { font-size: 12px; color: var(--muted); }
+
+    /* ── Settings ────────────────────────────────────── */
+    .settings-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr 2fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+    select, input[type="password"], input[type="text"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s;
+      width: 100%;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    select option { background: var(--surface2); }
+
+    /* ── Buttons ─────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s, box-shadow .15s;
+      white-space: nowrap;
+    }
+    .btn:active  { transform: scale(.97); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3a78e8, var(--accent));
+      color: #fff;
+      box-shadow: 0 2px 12px rgba(79,142,247,.35);
+    }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 4px 20px rgba(79,142,247,.55); }
+
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      padding: 8px 12px;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+
+    /* ── Upload area ─────────────────────────────────── */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 32px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      text-align: center;
+    }
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: var(--accent);
+      background: rgba(79,142,247,.06);
+    }
+    .upload-area.has-image { padding: 0; border-style: solid; border-color: var(--border); }
+
+    .upload-icon { font-size: 36px; line-height: 1; }
+    .upload-title { font-size: 15px; font-weight: 600; color: #fff; }
+    .upload-sub   { font-size: 12px; color: var(--muted); }
+
+    #previewImg {
+      width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      border-radius: calc(var(--radius) - 2px);
+      display: block;
+    }
+
+    /* ── Action bar ──────────────────────────────────── */
+    .action-bar { display: flex; gap: 10px; align-items: center; }
+
+    /* ── Status / Loading ────────────────────────────── */
+    .status-msg {
+      padding: 9px 13px;
+      border-radius: 6px;
+      font-size: 12px;
+      border-left: 3px solid transparent;
+    }
+    .status-msg.info    { background: rgba(79,142,247,.1);  border-color: var(--accent); color: #8bb4ff; }
+    .status-msg.success { background: rgba(61,220,132,.1);  border-color: var(--green);  color: var(--green); }
+    .status-msg.error   { background: rgba(255,77,109,.1);  border-color: var(--red);    color: var(--red); }
+    .status-msg.warn    { background: rgba(255,179,71,.1);  border-color: var(--warn);   color: var(--warn); }
+    .hidden { display: none !important; }
+
+    .loading { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--accent); }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Results ─────────────────────────────────────── */
+    .results {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .results-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .results-header h3 { font-size: 14px; font-weight: 700; color: #fff; }
+
+    .badge {
+      margin-left: auto;
+      font-size: 11px; font-weight: 700;
+      padding: 2px 10px; border-radius: 99px;
+      background: var(--surface2); color: var(--muted);
+      border: 1px solid var(--border);
+      text-transform: uppercase; letter-spacing: .4px;
+    }
+    .badge.high   { background: rgba(61,220,132,.15);  color: var(--green); border-color: var(--green); }
+    .badge.medium { background: rgba(255,179,71,.15);   color: var(--warn);  border-color: var(--warn); }
+    .badge.low    { background: rgba(255,77,109,.15);   color: var(--red);   border-color: var(--red); }
+
+    .results-body {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+    }
+
+    /* Painel de dados */
+    .data-panel { padding: 16px; display: flex; flex-direction: column; gap: 14px; border-right: 1px solid var(--border); }
+
+    .data-item { display: flex; flex-direction: column; gap: 3px; }
+    .data-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .data-value { font-size: 13px; color: var(--text); line-height: 1.45; }
+    .data-value.mono { font-family: 'Consolas', monospace; color: var(--accent); font-size: 14px; }
+    .data-value.city { font-size: 16px; font-weight: 700; color: #fff; }
+
+    .radius-bar {
+      height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 4px;
+    }
+    .radius-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .5s; }
+
+    /* Mapa */
+    #mapFrame {
+      width: 100%;
+      height: 320px;
+      display: block;
+    }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 600px) {
+      .settings-panel { grid-template-columns: 1fr; }
+      .results-body   { grid-template-columns: 1fr; }
+      .data-panel     { border-right: none; border-bottom: 1px solid var(--border); }
+      #mapFrame       { height: 260px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ─────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <span class="logo-icon">🌍</span>
+      <div>
+        <h1>GeoFinder AI</h1>
+        <p>Envie uma foto e descubra onde é no mundo</p>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="settingsToggle">⚙ Configurar API</button>
+  </header>
+
+  <!-- ── Settings ───────────────────────────────────── -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="form-group">
+      <label>Provedor de IA</label>
+      <select id="provider">
+        <option value="vision">Cloud Vision API (Google) ⭐</option>
+        <option value="gemini">Gemini Flash (Google)</option>
+        <option value="claude">Claude Sonnet (Anthropic)</option>
+        <option value="openai">GPT-4o (OpenAI)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="Cole sua chave aqui…" autocomplete="off" />
+    </div>
+    <button class="btn btn-ghost" id="saveBtn" style="height:38px">💾 Salvar</button>
+  </div>
+
+  <!-- ── Upload ──────────────────────────────────────── -->
+  <input type="file" id="fileInput" accept="image/*" style="display:none" />
+  <div class="upload-area" id="uploadArea">
+    <span class="upload-icon">🛰️</span>
+    <span class="upload-title">Arraste uma imagem aqui</span>
+    <span class="upload-sub">ou clique para selecionar · também aceita Ctrl+V (colar)</span>
+  </div>
+
+  <!-- ── Ações ───────────────────────────────────────── -->
+  <div class="action-bar">
+    <button class="btn btn-primary" id="analyzeBtn" disabled>
+      🔍 Identificar Localização
+    </button>
+    <button class="btn btn-ghost" id="clearBtn" style="display:none">✕ Limpar</button>
+    <div class="loading hidden" id="loading">
+      <div class="spinner"></div>
+      <span>Analisando com IA…</span>
+    </div>
+  </div>
+
+  <!-- ── Status ─────────────────────────────────────── -->
+  <div id="statusMsg" class="status-msg info">
+    Configure a API Key (botão ⚙), depois envie uma imagem de satélite, aérea ou de rua.
+  </div>
+
+  <!-- ── Resultados ──────────────────────────────────── -->
+  <div class="results hidden" id="results">
+    <div class="results-header">
+      <span>📍</span>
+      <h3 id="resultsTitle">Localização identificada</h3>
+      <span class="badge" id="confBadge">—</span>
+    </div>
+    <div class="results-body">
+      <!-- Dados -->
+      <div class="data-panel">
+        <div class="data-item">
+          <span class="data-label">Cidade / Região</span>
+          <span class="data-value city" id="rCity">—</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">País</span>
+          <span class="data-value" id="rCountry">—</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Coordenadas</span>
+          <span class="data-value mono" id="rCoords">—</span>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Margem de erro estimada</span>
+          <span class="data-value" id="rRadius">—</span>
+          <div class="radius-bar"><div class="radius-fill" id="radiusFill" style="width:0%"></div></div>
+        </div>
+        <div class="data-item">
+          <span class="data-label">Descrição</span>
+          <span class="data-value" id="rDesc">—</span>
+        </div>
+        <a class="btn btn-ghost" id="mapsLink" href="#" target="_blank" style="margin-top:4px;font-size:12px;display:none">
+          🗺 Abrir no Google Maps
+        </a>
+      </div>
+      <!-- Mapa -->
+      <iframe id="mapFrame" style="border:none" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+  </div>
+
+</div><!-- /.app -->
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Estado ──────────────────────────────────────────
+  let imageDataUrl = null;
+
+  // ── DOM ─────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  const uploadArea    = $('uploadArea');
+  const fileInput     = $('fileInput');
+  const previewImg    = document.createElement('img');
+  previewImg.id       = 'previewImg';
+
+  const analyzeBtn    = $('analyzeBtn');
+  const clearBtn      = $('clearBtn');
+  const loading       = $('loading');
+  const statusMsg     = $('statusMsg');
+  const results       = $('results');
+  const settingsToggle= $('settingsToggle');
+  const settingsPanel = $('settingsPanel');
+  const saveBtn       = $('saveBtn');
+  const apiKeyInput   = $('apiKey');
+  const providerSel   = $('provider');
+
+  // ── Configurações ────────────────────────────────────
+  const saved = JSON.parse(localStorage.getItem('geofinder_cfg') || '{}');
+  if (saved.apiKey)   apiKeyInput.value  = saved.apiKey;
+  if (saved.provider) providerSel.value  = saved.provider;
+
+  settingsToggle.addEventListener('click', () =>
+    settingsPanel.style.display = settingsPanel.style.display === 'none' ? '' : 'none'
+  );
+
+  saveBtn.addEventListener('click', () => {
+    const key = apiKeyInput.value.trim();
+    if (!key) { showStatus('Digite uma API Key válida.', 'error'); return; }
+    localStorage.setItem('geofinder_cfg', JSON.stringify({ apiKey: key, provider: providerSel.value }));
+    showStatus('Configurações salvas!', 'success');
+  });
+
+  // ── Upload: clique ───────────────────────────────────
+  uploadArea.addEventListener('click', () => {
+    if (uploadArea.classList.contains('has-image')) return;
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) loadFile(file);
+  });
+
+  // ── Upload: drag & drop ──────────────────────────────
+  uploadArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+  });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadFile(file);
+  });
+
+  // ── Upload: colar (Ctrl+V) ───────────────────────────
+  document.addEventListener('paste', e => {
+    const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+    if (item) loadFile(item.getAsFile());
+  });
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      imageDataUrl = ev.target.result;
+      previewImg.src = imageDataUrl;
+      uploadArea.innerHTML = '';
+      uploadArea.classList.add('has-image');
+      uploadArea.appendChild(previewImg);
+      analyzeBtn.disabled = false;
+      clearBtn.style.display = '';
+      results.classList.add('hidden');
+      showStatus('Imagem carregada. Clique em "Identificar Localização".', 'info');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Limpar ───────────────────────────────────────────
+  clearBtn.addEventListener('click', () => {
+    imageDataUrl = null;
+    fileInput.value = '';
+    uploadArea.classList.remove('has-image');
+    uploadArea.innerHTML = `
+      <span class="upload-icon">🛰️</span>
+      <span class="upload-title">Arraste uma imagem aqui</span>
+      <span class="upload-sub">ou clique para selecionar · também aceita Ctrl+V (colar)</span>
+    `;
+    analyzeBtn.disabled = true;
+    clearBtn.style.display = 'none';
+    results.classList.add('hidden');
+    $('mapFrame').src = 'about:blank';
+    showStatus('Configure a API Key (botão ⚙), depois envie uma imagem de satélite, aérea ou de rua.', 'info');
+  });
+
+  // ── Analisar ─────────────────────────────────────────
+  analyzeBtn.addEventListener('click', async () => {
+    const apiKey   = apiKeyInput.value.trim();
+    const provider = providerSel.value;
+
+    if (!apiKey) {
+      showStatus('Configure a API Key antes de analisar.', 'error');
+      settingsPanel.style.display = '';
+      return;
+    }
+
+    setLoading(true);
+    results.classList.add('hidden');
+
+    try {
+      const base64 = imageDataUrl.split(',')[1];
+      const result = await callAI(base64, apiKey, provider);
+      renderResult(result);
+    } catch (err) {
+      showStatus('Erro na análise: ' + err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  // ── Prompt ───────────────────────────────────────────
+  const PROMPT = `Você é um especialista em geolocalização visual.
+Analise esta imagem (pode ser satélite, aérea, street view ou foto de paisagem) e identifique a localização geográfica mais provável.
+
+Retorne APENAS um JSON válido, sem markdown, sem texto extra:
+{
+  "found": true,
+  "latitude": -23.5505,
+  "longitude": -46.6333,
+  "city": "São Paulo",
+  "region": "Estado de São Paulo",
+  "country": "Brasil",
+  "description": "descrição detalhada das características visuais que levaram à identificação",
+  "confidence": "alto",
+  "radius_km": 20
+}
+
+Regras:
+- latitude/longitude: coordenadas decimais do ponto central identificado
+- confidence: "alto" (< 50 km erro), "médio" (50–200 km), "baixo" (> 200 km)
+- radius_km: estimativa de margem de erro em quilômetros
+- Se a imagem não mostrar nenhuma região geográfica identificável: { "found": false, "description": "motivo" }
+- Considere: vegetação, topografia, arquitetura, idioma em placas, clima, padrões urbanos, etc.`;
+
+  // ── Chamadas de API ──────────────────────────────────
+  async function callAI(base64, apiKey, provider) {
+    if (provider === 'vision') return callVision(base64, apiKey);
+    if (provider === 'gemini') return callGemini(base64, apiKey);
+    if (provider === 'claude') return callClaude(base64, apiKey);
+    return callOpenAI(base64, apiKey);
+  }
+
+  async function resolveGeminiModels(key) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+    if (!res.ok) throw new Error('Não foi possível listar modelos. Verifique a API Key.');
+    const { models = [] } = await res.json();
+    const vision = models.filter(m =>
+      m.supportedGenerationMethods?.includes('generateContent') &&
+      !m.name.includes('embedding') && !m.name.includes('aqa') &&
+      (m.name.includes('flash') || m.name.includes('gemini-1.5') || m.name.includes('gemini-2'))
+    );
+    if (!vision.length) throw new Error('Nenhum modelo Gemini disponível nesta API Key.');
+    vision.sort((a, b) => {
+      const score = m => m.name.includes('lite') || m.name.includes('8b') ? 0 : m.name.includes('flash') ? 1 : 2;
+      return score(a) - score(b);
+    });
+    return vision.map(m => m.name.replace('models/', ''));
+  }
+
+  async function geminiGenerate(models, key, body) {
+    let lastErr;
+    for (const model of models) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      );
+      if (res.status === 429 || res.status === 503) {
+        lastErr = new Error((await res.json().catch(() => ({}))).error?.message || `HTTP ${res.status}`);
+        continue;
+      }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+      const t = (await res.json()).candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!t) throw new Error('Resposta vazia do Gemini.');
+      return t;
+    }
+    throw lastErr || new Error('Todos os modelos Gemini indisponíveis. Tente novamente em alguns minutos.');
+  }
+
+  async function callGemini(base64, apiKey) {
+    const models = await resolveGeminiModels(apiKey);
+    const t = await geminiGenerate(models, apiKey, {
+      contents: [{ parts: [
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+        { text: PROMPT }
+      ]}],
+      generationConfig: { maxOutputTokens: 600, temperature: 0.1 },
+    });
+    return parseJSON(t);
+  }
+
+  async function callVision(base64, apiKey) {
+    const res = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ image: { content: base64 },
+          features: [{ type: 'LANDMARK_DETECTION', maxResults: 5 },
+                     { type: 'LABEL_DETECTION', maxResults: 10 }] }] }) }
+    );
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    const lms  = data.responses?.[0]?.landmarkAnnotations || [];
+    if (lms.length > 0) {
+      const top = lms[0];
+      const loc = top.locations?.[0]?.latLng;
+      if (!loc) throw new Error('Landmark sem coordenadas.');
+      const score  = top.score || 0;
+      const others = lms.slice(1).map(l => l.description).join(', ');
+      return {
+        found: true, latitude: loc.latitude, longitude: loc.longitude,
+        city: top.description, region: '', country: '',
+        description: others ? `${top.description}. Também: ${others}.` : top.description,
+        confidence: score > 0.7 ? 'alto' : score > 0.4 ? 'médio' : 'baixo',
+        radius_km:  score > 0.7 ? 2 : score > 0.4 ? 10 : 30,
+      };
+    }
+    const labels = (data.responses?.[0]?.labelAnnotations || []).map(l => l.description).join(', ');
+    return { found: false, description: labels
+      ? `Sem landmark reconhecido. Elementos: ${labels}. Tente Gemini ou Claude para cenas genéricas.`
+      : 'Nenhum landmark reconhecido. Use Gemini ou Claude para cenas sem pontos famosos.' };
+  }
+
+  async function callClaude(base64, apiKey) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text', text: PROMPT },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return parseJSON(data.content[0].text);
+  }
+
+  async function callOpenAI(base64, apiKey) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+            { type: 'text', text: PROMPT },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return parseJSON(data.choices[0].message.content);
+  }
+
+  function parseJSON(text) {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('A IA não retornou JSON válido.');
+    return JSON.parse(match[0]);
+  }
+
+  // ── Renderizar resultado ──────────────────────────────
+  function renderResult(r) {
+    results.classList.remove('hidden');
+
+    if (!r.found) {
+      $('rCity').textContent    = 'Não identificado';
+      $('rCountry').textContent = '—';
+      $('rCoords').textContent  = '—';
+      $('rDesc').textContent    = r.description || 'Imagem não reconhecível.';
+      $('rRadius').textContent  = '—';
+      $('radiusFill').style.width = '0%';
+      $('mapsLink').style.display = 'none';
+      $('mapFrame').src = 'about:blank';
+      setBadge('—', '');
+      showStatus('Localização não identificada.', 'warn');
+      return;
+    }
+
+    const lat  = Number(r.latitude)  || 0;
+    const lng  = Number(r.longitude) || 0;
+    const rkm  = Number(r.radius_km) || 100;
+    const conf = (r.confidence || 'médio').toLowerCase();
+
+    $('rCity').textContent    = r.city    || '—';
+    $('rCountry').textContent = [r.region, r.country].filter(Boolean).join(', ') || '—';
+    $('rCoords').textContent  = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    $('rDesc').textContent    = r.description || '—';
+    $('rRadius').textContent  = `~${rkm} km`;
+
+    // barra de erro (0 km = 100% confiança → 500+ km = 0%)
+    const fillPct = Math.max(0, 100 - Math.min(rkm / 5, 100));
+    $('radiusFill').style.width = fillPct + '%';
+
+    // badge de confiança
+    const confMap = { alto: ['Alto', 'high'], médio: ['Médio', 'medium'], baixo: ['Baixo', 'low'] };
+    const [label, cls] = confMap[conf] || ['—', ''];
+    setBadge(label, cls);
+
+    // link Google Maps
+    const mapsHref = `https://www.google.com/maps?q=${lat},${lng}`;
+    $('mapsLink').href = mapsHref;
+    $('mapsLink').style.display = '';
+
+    // ── OpenStreetMap embed (sem API key) ────────────────
+    const delta = rkm < 5 ? 0.05 : rkm < 20 ? 0.2 : rkm < 100 ? 1.0 : rkm < 500 ? 5.0 : 20.0;
+    const bbox  = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
+    $('mapFrame').src =
+      `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+
+    showStatus(`Local identificado com confiança ${label.toLowerCase()}: ${r.city || ''}${r.country ? ', ' + r.country : ''}.`, 'success');
+  }
+
+  // ── Helpers ───────────────────────────────────────────
+  function setBadge(text, cls) {
+    const b = $('confBadge');
+    b.textContent = text;
+    b.className   = `badge ${cls}`;
+  }
+
+  function showStatus(msg, type = 'info') {
+    statusMsg.textContent = msg;
+    statusMsg.className   = `status-msg ${type}`;
+  }
+
+  function setLoading(show) {
+    loading.classList.toggle('hidden', !show);
+    analyzeBtn.disabled = show;
+  }
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Tools</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+
+    <!-- ── Header ─────────────────────────────────────── -->
+    <header class="header">
+      <div class="header-left">
+        <span class="logo">✦</span>
+        <h1>AI Tools</h1>
+      </div>
+      <button id="settingsToggle" class="icon-btn" title="Configurações">⚙️</button>
+    </header>
+
+    <!-- ── Configurações (compartilhadas) ────────────── -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="form-group">
+        <label for="provider">Provedor de IA</label>
+        <select id="provider">
+          <option value="vision">Cloud Vision API (Google) ⭐</option>
+          <option value="gemini">Gemini Flash (Google)</option>
+          <option value="claude">Claude Sonnet (Anthropic)</option>
+          <option value="openai">GPT-4o (OpenAI)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="apiKey">API Key</label>
+        <div class="input-row">
+          <input type="password" id="apiKey" placeholder="Cole sua chave aqui..." autocomplete="off" />
+          <button id="toggleKey" class="icon-btn sm" title="Mostrar/Ocultar">👁</button>
+        </div>
+      </div>
+      <button id="saveSettings" class="btn secondary">Salvar configurações</button>
+    </div>
+
+    <!-- ── Abas ───────────────────────────────────────── -->
+    <div class="tabs">
+      <button class="tab active" data-tab="screen">🔍 Screen Finder</button>
+      <button class="tab" data-tab="geo">🌍 GeoFinder</button>
+    </div>
+
+    <!-- ════════════════════════════════════════════════ -->
+    <!-- ABA: SCREEN FINDER                              -->
+    <!-- ════════════════════════════════════════════════ -->
+    <div id="tab-screen" class="tab-content">
+
+      <div class="search-section">
+        <label for="searchQuery">O que deseja encontrar?</label>
+        <input type="text" id="searchQuery"
+          placeholder='Ex: "minimap", "botão fechar", "inimigo"…' maxlength="120" />
+      </div>
+
+      <div class="actions">
+        <button id="captureBtn" class="btn primary">📷 Capturar Tela</button>
+        <button id="analyzeBtn" class="btn accent" disabled>🤖 Analisar com IA</button>
+        <button id="clearBtn" class="btn ghost" disabled title="Limpar">✕</button>
+      </div>
+
+      <div id="statusMsg" class="status-msg hidden"></div>
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div><span>Analisando com IA…</span>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="previewCanvas"></canvas>
+        <div id="canvasHint" class="canvas-hint">📷 Clique em "Capturar Tela" para começar</div>
+      </div>
+
+      <div id="resultSection" class="result-section hidden">
+        <div class="result-header">
+          <span>📍</span><h3>Resultado</h3>
+          <span id="resultBadge" class="badge">—</span>
+        </div>
+        <div class="result-grid">
+          <div class="result-item">
+            <span class="rlabel">Coordenadas (centro)</span>
+            <span id="resultCoords" class="rvalue mono">—</span>
+          </div>
+          <div class="result-item">
+            <span class="rlabel">Tamanho aproximado</span>
+            <span id="resultSize" class="rvalue mono">—</span>
+          </div>
+          <div class="result-item full">
+            <span class="rlabel">Descrição</span>
+            <span id="resultDescription" class="rvalue">—</span>
+          </div>
+        </div>
+        <div id="screenMapWrap" class="screen-map-wrap hidden">
+          <div class="rlabel" style="margin-bottom:6px">📍 Localização no mapa</div>
+          <iframe id="screenMapImg" class="static-map screen-map-frame" style="border:none" loading="lazy"></iframe>
+          <a id="screenMapsLink" class="btn ghost" href="#" target="_blank"
+             style="font-size:11px;margin-top:6px;display:none">🗺 Abrir no Google Maps</a>
+        </div>
+      </div>
+
+    </div><!-- /tab-screen -->
+
+    <!-- ════════════════════════════════════════════════ -->
+    <!-- ABA: GEOFINDER                                  -->
+    <!-- ════════════════════════════════════════════════ -->
+    <div id="tab-geo" class="tab-content hidden">
+
+      <!-- Upload -->
+      <div class="upload-area" id="uploadArea">
+        <span class="upload-icon">🛰️</span>
+        <span class="upload-title">Arraste uma imagem aqui</span>
+        <span class="upload-sub">ou clique para selecionar · Ctrl+V para colar</span>
+        <input type="file" id="geoFileInput" accept="image/*" style="display:none" />
+      </div>
+
+      <div class="actions">
+        <button id="geoAnalyzeBtn" class="btn primary" disabled>🔍 Identificar Localização</button>
+        <button id="geoClearBtn" class="btn ghost" style="display:none">✕ Limpar</button>
+        <div class="loading hidden" id="geoLoading">
+          <div class="spinner"></div><span>Analisando com IA…</span>
+        </div>
+      </div>
+
+      <div id="geoStatus" class="status-msg info">
+        Configure a API Key (⚙), depois envie uma imagem.
+      </div>
+
+      <!-- Resultado geo -->
+      <div class="geo-result hidden" id="geoResult">
+        <div class="result-header">
+          <span>📍</span><h3 id="geoResultTitle">Localização</h3>
+          <span class="badge" id="geoBadge">—</span>
+        </div>
+        <div class="geo-body">
+          <div class="geo-data">
+            <div class="result-item">
+              <span class="rlabel">Cidade / Região</span>
+              <span class="rvalue" id="geoCity" style="font-size:15px;font-weight:700;color:#fff">—</span>
+            </div>
+            <div class="result-item">
+              <span class="rlabel">País</span>
+              <span class="rvalue" id="geoCountry">—</span>
+            </div>
+            <div class="result-item">
+              <span class="rlabel">Coordenadas</span>
+              <span class="rvalue mono" id="geoCoords">—</span>
+            </div>
+            <div class="result-item">
+              <span class="rlabel">Margem de erro</span>
+              <span class="rvalue" id="geoRadius">—</span>
+              <div class="radius-bar"><div class="radius-fill" id="geoFill"></div></div>
+            </div>
+            <div class="result-item">
+              <span class="rlabel">Descrição</span>
+              <span class="rvalue" id="geoDesc">—</span>
+            </div>
+            <a id="mapsLink" class="btn ghost" href="#" target="_blank"
+               style="font-size:11px;margin-top:4px;display:none">🗺 Google Maps</a>
+          </div>
+          <iframe id="geoMapImg" class="static-map geo-static-map" style="border:none" loading="lazy"></iframe>
+        </div>
+      </div>
+
+    </div><!-- /tab-geo -->
+
+  </div><!-- /.container -->
+
+  <script src="popup.js"></script>
+</body>
+</html>

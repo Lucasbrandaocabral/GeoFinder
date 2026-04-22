@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoFinder AI</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d0d12;
+      --surface: #15151f;
+      --surf2:   #1c1c2a;
+      --border:  #2b2b3d;
+      --accent:  #4f8ef7;
+      --green:   #3ddc84;
+      --red:     #ff4d6d;
+      --warn:    #ffb347;
+      --text:    #e0e0f0;
+      --muted:   #6a6a8a;
+      --r:       10px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 20px 48px;
+    }
+
+    .app { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Header */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo h1 { font-size: 20px; font-weight: 700; color: #fff; }
+    .logo p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* Settings */
+    .settings {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px 16px;
+      display: grid; grid-template-columns: 160px 1fr auto; gap: 12px; align-items: end;
+    }
+    .fg { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    select, input {
+      background: var(--surf2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px; padding: 8px 10px;
+      font-size: 13px; outline: none; transition: border-color .15s; width: 100%;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    select option { background: var(--surf2); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s, box-shadow .15s; white-space: nowrap;
+    }
+    .btn:active  { transform: scale(.97); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none !important; }
+    .btn-primary {
+      background: linear-gradient(135deg,#3a78e8,var(--accent));
+      color:#fff; box-shadow:0 2px 12px rgba(79,142,247,.35);
+    }
+    .btn-primary:hover:not(:disabled) { box-shadow:0 4px 20px rgba(79,142,247,.55); }
+    .btn-ghost {
+      background:transparent; border:1px solid var(--border); color:var(--muted); padding:8px 14px;
+    }
+    .btn-ghost:hover { color:var(--text); border-color:var(--text); }
+
+    /* Upload */
+    .upload {
+      border: 2px dashed var(--border); border-radius: var(--r);
+      background: var(--surface); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
+      padding: 36px; cursor: pointer; transition: border-color .2s, background .2s; text-align: center;
+      min-height: 160px;
+    }
+    .upload:hover, .upload.over { border-color: var(--accent); background: rgba(79,142,247,.06); }
+    .upload.has-img { padding: 0; border-style: solid; cursor: default; }
+    .upload .icon  { font-size: 38px; line-height: 1; }
+    .upload .title { font-size: 15px; font-weight: 600; color: #fff; }
+    .upload .sub   { font-size: 12px; color: var(--muted); }
+    #preview { width: 100%; max-height: 460px; object-fit: contain;
+               border-radius: calc(var(--r) - 2px); display: block; }
+
+    /* Actions */
+    .actions { display: flex; gap: 10px; align-items: center; }
+
+    /* Status */
+    .status {
+      padding: 9px 13px; border-radius: 6px; font-size: 12px;
+      border-left: 3px solid transparent;
+    }
+    .status.info    { background:rgba(79,142,247,.1);  border-color:var(--accent); color:#8bb4ff; }
+    .status.success { background:rgba(61,220,132,.1);  border-color:var(--green);  color:var(--green); }
+    .status.error   { background:rgba(255,77,109,.1);  border-color:var(--red);    color:var(--red); }
+    .status.warn    { background:rgba(255,179,71,.1);   border-color:var(--warn);   color:var(--warn); }
+    .hidden { display: none !important; }
+
+    .loading { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--accent); }
+    .spin {
+      width:16px; height:16px; border:2px solid var(--border);
+      border-top-color:var(--accent); border-radius:50%;
+      animation:spin .7s linear infinite; flex-shrink:0;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Results */
+    .results {
+      background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden;
+    }
+    .res-header {
+      padding:12px 16px; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:10px;
+    }
+    .res-header h3 { font-size:14px; font-weight:700; color:#fff; }
+    .badge {
+      margin-left:auto; font-size:11px; font-weight:700; padding:2px 10px;
+      border-radius:99px; background:var(--surf2); color:var(--muted);
+      border:1px solid var(--border); text-transform:uppercase; letter-spacing:.4px;
+    }
+    .badge.high   { background:rgba(61,220,132,.15); color:var(--green); border-color:var(--green); }
+    .badge.medium { background:rgba(255,179,71,.15);  color:var(--warn);  border-color:var(--warn); }
+    .badge.low    { background:rgba(255,77,109,.15);  color:var(--red);   border-color:var(--red); }
+
+    .res-body { display:grid; grid-template-columns:280px 1fr; }
+
+    .data { padding:16px; display:flex; flex-direction:column; gap:14px; border-right:1px solid var(--border); }
+    .di   { display:flex; flex-direction:column; gap:3px; }
+    .dl   { font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+    .dv   { font-size:13px; color:var(--text); line-height:1.45; }
+    .dv.mono { font-family:'Consolas',monospace; color:var(--accent); font-size:14px; }
+    .dv.big  { font-size:17px; font-weight:700; color:#fff; }
+
+    .bar  { height:4px; background:var(--border); border-radius:99px; overflow:hidden; margin-top:4px; }
+    .fill { height:100%; background:var(--accent); border-radius:99px; transition:width .6s; }
+
+    #map { height:360px; }
+
+    @media(max-width:640px) {
+      .settings  { grid-template-columns:1fr; }
+      .res-body  { grid-template-columns:1fr; }
+      .data      { border-right:none; border-bottom:1px solid var(--border); }
+      #map       { height:260px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <span style="font-size:28px">🌍</span>
+      <div>
+        <h1>GeoFinder AI</h1>
+        <p>Envie uma foto e descubra onde é no mundo</p>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="settingsToggle">⚙ API Key</button>
+  </header>
+
+  <!-- Settings -->
+  <div class="settings" id="settingsPanel">
+    <div class="fg">
+      <label>Provedor</label>
+      <select id="provider">
+        <option value="vision">Cloud Vision API (Google) ⭐</option>
+        <option value="gemini">Gemini Flash (Google)</option>
+        <option value="claude">Claude Sonnet (Anthropic)</option>
+        <option value="openai">GPT-4o (OpenAI)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="Cole sua chave aqui…" autocomplete="off" />
+    </div>
+    <button class="btn btn-ghost" id="saveBtn">💾 Salvar</button>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload" id="uploadArea">
+    <span class="icon">🛰️</span>
+    <span class="title">Arraste uma imagem aqui</span>
+    <span class="sub">ou clique para selecionar · Ctrl+V para colar da área de transferência</span>
+    <input type="file" id="fileInput" accept="image/*" style="display:none" />
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-primary" id="analyzeBtn" disabled>🔍 Identificar Localização</button>
+    <button class="btn btn-ghost" id="clearBtn" style="display:none">✕ Limpar</button>
+    <div class="loading hidden" id="loading"><div class="spin"></div><span>Analisando com IA…</span></div>
+  </div>
+
+  <!-- Status -->
+  <div id="status" class="status info">Configure a API Key (⚙), depois envie uma imagem.</div>
+
+  <!-- Results -->
+  <div class="results hidden" id="results">
+    <div class="res-header">
+      <span>📍</span>
+      <h3>Localização identificada</h3>
+      <span class="badge" id="badge">—</span>
+    </div>
+    <div class="res-body">
+      <div class="data">
+        <div class="di"><span class="dl">Cidade / Região</span><span class="dv big" id="rCity">—</span></div>
+        <div class="di"><span class="dl">País</span><span class="dv" id="rCountry">—</span></div>
+        <div class="di"><span class="dl">Coordenadas</span><span class="dv mono" id="rCoords">—</span></div>
+        <div class="di">
+          <span class="dl">Margem de erro</span>
+          <span class="dv" id="rRadius">—</span>
+          <div class="bar"><div class="fill" id="fill" style="width:0%"></div></div>
+        </div>
+        <div class="di"><span class="dl">Descrição</span><span class="dv" id="rDesc">—</span></div>
+        <a class="btn btn-ghost" id="mapsLink" href="#" target="_blank"
+           style="margin-top:4px;font-size:12px;display:none">🗺 Abrir no Google Maps</a>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let imgDataUrl = null, map = null, marker = null, circle = null;
+
+  const $ = id => document.getElementById(id);
+
+  // ── Config ──────────────────────────────────────────
+  const cfg = JSON.parse(localStorage.getItem('geofinder') || '{}');
+  if (cfg.apiKey)   $('apiKey').value   = cfg.apiKey;
+  if (cfg.provider) $('provider').value = cfg.provider;
+
+  $('settingsToggle').onclick = () => {
+    const p = $('settingsPanel');
+    p.style.display = p.style.display === 'none' ? '' : 'none';
+  };
+
+  $('saveBtn').onclick = () => {
+    const k = $('apiKey').value.trim();
+    if (!k) { showStatus('Digite uma API Key válida.', 'error'); return; }
+    localStorage.setItem('geofinder', JSON.stringify({ apiKey: k, provider: $('provider').value }));
+    showStatus('Configurações salvas!', 'success');
+  };
+
+  // ── Upload ──────────────────────────────────────────
+  $('uploadArea').onclick = () => $('fileInput').click();
+  $('fileInput').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+
+  $('uploadArea').addEventListener('dragover', e => { e.preventDefault(); $('uploadArea').classList.add('over'); });
+  $('uploadArea').addEventListener('dragleave', () => $('uploadArea').classList.remove('over'));
+  $('uploadArea').addEventListener('drop', e => {
+    e.preventDefault(); $('uploadArea').classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f?.type.startsWith('image/')) loadFile(f);
+  });
+
+  document.addEventListener('paste', e => {
+    const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+    if (item) loadFile(item.getAsFile());
+  });
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      imgDataUrl = ev.target.result;
+      const img = document.createElement('img');
+      img.id = 'preview';
+      img.src = imgDataUrl;
+      const ua = $('uploadArea');
+      ua.innerHTML = '';
+      ua.classList.add('has-img');
+      ua.appendChild(img);
+      $('analyzeBtn').disabled = false;
+      $('clearBtn').style.display = '';
+      $('results').classList.add('hidden');
+      showStatus('Imagem carregada. Clique em "Identificar Localização".', 'info');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  $('clearBtn').onclick = () => {
+    imgDataUrl = null;
+    $('fileInput').value = '';
+    const ua = $('uploadArea');
+    ua.classList.remove('has-img');
+    ua.innerHTML = `
+      <span class="icon">🛰️</span>
+      <span class="title">Arraste uma imagem aqui</span>
+      <span class="sub">ou clique para selecionar · Ctrl+V para colar da área de transferência</span>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" />`;
+    ua.onclick = () => ua.querySelector('input').click();
+    ua.querySelector('input').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+    $('analyzeBtn').disabled = true;
+    $('clearBtn').style.display = 'none';
+    $('results').classList.add('hidden');
+    showStatus('Configure a API Key (⚙), depois envie uma imagem.', 'info');
+  };
+
+  // ── Analisar ────────────────────────────────────────
+  $('analyzeBtn').onclick = async () => {
+    const key      = $('apiKey').value.trim();
+    const provider = $('provider').value;
+    if (!key) {
+      showStatus('Configure a API Key antes de analisar.', 'error');
+      $('settingsPanel').style.display = '';
+      return;
+    }
+    setLoading(true);
+    $('results').classList.add('hidden');
+    try {
+      const base64 = imgDataUrl.split(',')[1];
+      const result = await callAI(base64, key, provider);
+      renderResult(result);
+    } catch (err) {
+      showStatus('Erro: ' + err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Prompt ──────────────────────────────────────────
+  const PROMPT = `Você é um especialista em geolocalização visual.
+Analise a imagem (satélite, aérea, street view ou paisagem) e identifique a localização geográfica.
+
+Responda SOMENTE com JSON válido, sem markdown:
+{
+  "found": true,
+  "latitude": -23.5505,
+  "longitude": -46.6333,
+  "city": "São Paulo",
+  "region": "SP",
+  "country": "Brasil",
+  "description": "características visuais que levaram à identificação",
+  "confidence": "alto",
+  "radius_km": 20
+}
+
+- confidence: "alto" (<50 km erro), "médio" (50-200 km), "baixo" (>200 km)
+- radius_km: margem de erro estimada em km
+- Se não identificável: { "found": false, "description": "motivo" }
+- Analise: vegetação, topografia, arquitetura, placas, clima, padrões urbanos, idioma, veículos.`;
+
+  // ── APIs ────────────────────────────────────────────
+  async function callAI(b64, key, provider) {
+    if (provider === 'vision') return callVision(b64, key);
+    if (provider === 'gemini') return callGemini(b64, key);
+    if (provider === 'claude') return callClaude(b64, key);
+    return callOpenAI(b64, key);
+  }
+
+  // ── Google Cloud Vision API (Landmark Detection) ────
+  async function callVision(b64, key) {
+    const res = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [{
+            image: { content: b64 },
+            features: [
+              { type: 'LANDMARK_DETECTION', maxResults: 5 },
+              { type: 'LABEL_DETECTION',    maxResults: 10 },
+            ],
+          }],
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const resp = data.responses?.[0];
+
+    // Usa o landmark de maior score
+    const landmarks = resp?.landmarkAnnotations || [];
+    if (landmarks.length > 0) {
+      const top = landmarks[0];
+      const loc = top.locations?.[0]?.latLng;
+      if (!loc) throw new Error('Landmark encontrado mas sem coordenadas.');
+
+      // Monta descrição com todos os landmarks detectados
+      const others = landmarks.slice(1).map(l => l.description).join(', ');
+      const desc = others
+        ? `${top.description}. Também detectado: ${others}.`
+        : top.description;
+
+      // Estima confiança pela pontuação do Vision API (0-1)
+      const score = top.score || 0;
+      const confidence = score > 0.7 ? 'alto' : score > 0.4 ? 'médio' : 'baixo';
+      const radius     = score > 0.7 ? 2 : score > 0.4 ? 10 : 30;
+
+      // Extrai cidade/país do nome do landmark via heurística simples
+      const parts = top.description.split(',').map(s => s.trim());
+
+      return {
+        found:       true,
+        latitude:    loc.latitude,
+        longitude:   loc.longitude,
+        city:        parts[0] || top.description,
+        region:      parts[1] || '',
+        country:     parts[parts.length - 1] || '',
+        description: desc,
+        confidence,
+        radius_km:   radius,
+      };
+    }
+
+    // Sem landmark — retorna não encontrado com dica dos labels
+    const labels = (resp?.labelAnnotations || []).map(l => l.description).join(', ');
+    return {
+      found: false,
+      description: labels
+        ? `Nenhum landmark reconhecido. Elementos detectados na imagem: ${labels}.`
+        : 'Nenhum landmark reconhecido nesta imagem. Tente com uma foto de ponto turístico ou cidade conhecida, ou use Gemini/Claude para cenas genéricas.',
+    };
+  }
+
+  async function resolveGeminiModel(key) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
+    );
+    if (!res.ok) throw new Error('Não foi possível listar modelos do Gemini. Verifique a API Key.');
+    const { models = [] } = await res.json();
+
+    const vision = models.filter(m =>
+      m.supportedGenerationMethods?.includes('generateContent') &&
+      !m.name.includes('embedding') &&
+      !m.name.includes('aqa') &&
+      (m.name.includes('flash') || m.name.includes('gemini-1.5') || m.name.includes('gemini-2'))
+    );
+
+    if (!vision.length) throw new Error('Nenhum modelo Gemini com visão disponível nesta API Key.');
+    const chosen = vision.find(m => m.name.includes('flash')) || vision[0];
+    return chosen.name.replace('models/', '');
+  }
+
+  async function callGemini(b64, key) {
+    const model = await resolveGeminiModel(key);
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: b64 } },
+            { text: PROMPT }
+          ]}],
+          generationConfig: { maxOutputTokens: 700, temperature: 0.1 },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error?.message || `HTTP ${res.status}`);
+    }
+    const d = await res.json();
+    const t = d.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!t) throw new Error('Resposta vazia do Gemini.');
+    return parseJ(t);
+  }
+
+  async function callClaude(b64, key) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 700,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text: PROMPT }
+        ]}],
+      }),
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const d = await res.json();
+    return parseJ(d.content[0].text);
+  }
+
+  async function callOpenAI(b64, key) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'gpt-4o', max_tokens: 700,
+        messages: [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
+          { type: 'text', text: PROMPT }
+        ]}],
+      }),
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const d = await res.json();
+    return parseJ(d.choices[0].message.content);
+  }
+
+  function parseJ(text) {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('A IA não retornou JSON válido. Resposta: ' + text.slice(0, 150));
+    return JSON.parse(m[0]);
+  }
+
+  // ── Render ──────────────────────────────────────────
+  function renderResult(r) {
+    $('results').classList.remove('hidden');
+
+    if (!r.found) {
+      $('rCity').textContent    = 'Não identificado';
+      $('rCountry').textContent = '—';
+      $('rCoords').textContent  = '—';
+      $('rDesc').textContent    = r.description || 'Imagem não reconhecível.';
+      $('rRadius').textContent  = '—';
+      $('fill').style.width     = '0%';
+      $('mapsLink').style.display = 'none';
+      setBadge('—', '');
+      showStatus('Localização não identificada.', 'warn');
+      return;
+    }
+
+    const lat = +r.latitude  || 0;
+    const lng = +r.longitude || 0;
+    const rkm = +r.radius_km || 100;
+    const conf = (r.confidence || 'médio').toLowerCase();
+
+    $('rCity').textContent    = r.city || '—';
+    $('rCountry').textContent = [r.region, r.country].filter(Boolean).join(', ') || '—';
+    $('rCoords').textContent  = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    $('rDesc').textContent    = r.description || '—';
+    $('rRadius').textContent  = `~${rkm} km`;
+    $('fill').style.width     = Math.max(0, 100 - Math.min(rkm / 5, 100)) + '%';
+
+    const confMap = { alto: ['Alto','high'], médio: ['Médio','medium'], baixo: ['Baixo','low'] };
+    const [label, cls] = confMap[conf] || ['—', ''];
+    setBadge(label, cls);
+
+    $('mapsLink').href = `https://www.google.com/maps?q=${lat},${lng}`;
+    $('mapsLink').style.display = '';
+
+    // Mapa
+    if (!map) {
+      map = L.map('map').setView([lat, lng], 10);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>', maxZoom: 19,
+      }).addTo(map);
+    } else {
+      map.setView([lat, lng], 10);
+    }
+
+    if (marker) { map.removeLayer(marker); map.removeLayer(circle); }
+
+    circle = L.circle([lat, lng], {
+      radius: rkm * 1000, color: '#4f8ef7', fillColor: '#4f8ef7', fillOpacity: 0.08, weight: 1.5,
+    }).addTo(map);
+
+    marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        html: `<div style="width:16px;height:16px;background:#ff4d6d;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(255,77,109,.35)"></div>`,
+        iconSize: [16, 16], iconAnchor: [8, 8], className: '',
+      })
+    }).addTo(map)
+      .bindPopup(`<b>${r.city || 'Local'}</b><br>${lat.toFixed(4)}, ${lng.toFixed(4)}`)
+      .openPopup();
+
+    map.fitBounds(circle.getBounds(), { padding: [24, 24] });
+
+    showStatus(`Identificado: ${r.city || ''}${r.country ? ', ' + r.country : ''} — confiança ${label.toLowerCase()}.`, 'success');
+  }
+
+  // ── Helpers ─────────────────────────────────────────
+  function setBadge(t, c) { $('badge').textContent = t; $('badge').className = `badge ${c}`; }
+  function showStatus(msg, type) { const s = $('status'); s.textContent = msg; s.className = `status ${type}`; }
+  function setLoading(v) {
+    $('loading').classList.toggle('hidden', !v);
+    $('analyzeBtn').disabled = v;
+  }
+
+})();
+</script>
+</body>
+</html>
